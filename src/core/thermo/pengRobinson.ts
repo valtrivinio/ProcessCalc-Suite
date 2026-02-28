@@ -1,4 +1,7 @@
-
+/**
+ * Alternative Peng-Robinson implementation (SI units, class-based).
+ * Not used by the UI; FluidProperties and EOS use src/core/thermo/eos.ts.
+ */
 import { Component } from '../data/components';
 
 export interface EOSResult {

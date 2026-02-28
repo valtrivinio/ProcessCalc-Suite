@@ -66,6 +66,8 @@ function HeatTransferContent() {
   // Results
   const [duty, setDuty] = useState(0); // kW
   const [lmtd, setLmtd] = useState(0);
+  const [lmtdValid, setLmtdValid] = useState(true);
+  const [temperatureCross, setTemperatureCross] = useState(false);
   const [ft, setFt] = useState(0);
   const [area, setArea] = useState(0);
   const [uDirty, setUDirty] = useState(0);
@@ -111,32 +113,29 @@ function HeatTransferContent() {
     // For sizing, usually we fix one side. Let's assume Hot Side is the process requirement.
     setDuty(Q_hot);
 
-    // 2. LMTD
-    const LMTD = calculateLMTD(th_in, th_out, tc_in, tc_out, 'counter');
-    setLmtd(LMTD);
+    // 2. LMTD (with temperature cross validation)
+    const lmtdResult = calculateLMTD(th_in, th_out, tc_in, tc_out, 'counter');
+    setLmtd(lmtdResult.value);
+    setLmtdValid(lmtdResult.valid);
+    setTemperatureCross(lmtdResult.temperatureCross);
 
-    // 3. Ft Correction
+    // 3. Ft Correction (guarded for division by zero / invalid)
     let Ft = 1.0;
     if (passConfig === '1-2') {
-      Ft = calculateFt(th_in, th_out, tc_in, tc_out);
+      const ftVal = calculateFt(th_in, th_out, tc_in, tc_out);
+      Ft = Number.isFinite(ftVal) && ftVal > 0 ? ftVal : 0;
     }
     setFt(Ft);
 
     // 4. U-Value (Dirty)
-    // 1/U_dirty = 1/U_clean + Rf_hot + Rf_cold
-    // Input U is usually "Service U" or "Clean U"? 
-    // Let's assume input is Clean U (U_clean) and we add fouling.
     const U_clean = parseFloat(uValue);
     const Rf_total = parseFloat(foulingHot) + parseFloat(foulingCold);
-    const U_dirty = 1 / ( (1/U_clean) + Rf_total );
+    const U_dirty = 1 / ((1 / U_clean) + Rf_total);
     setUDirty(U_dirty);
 
-    // 5. Area
-    // Q = U * A * LMTD * Ft
-    // A = Q / (U * LMTD * Ft)
-    // Q in kW -> W
-    if (U_dirty > 0 && LMTD > 0 && Ft > 0) {
-      const A = (Q_hot * 1000) / (U_dirty * LMTD * Ft);
+    // 5. Area — only when LMTD and Ft are valid
+    if (lmtdResult.valid && U_dirty > 0 && lmtdResult.value > 0 && Ft > 0) {
+      const A = (Q_hot * 1000) / (U_dirty * lmtdResult.value * Ft);
       setArea(A);
     } else {
       setArea(0);
@@ -211,11 +210,11 @@ function HeatTransferContent() {
               unit="m²" 
               subtext={`Dirty U=${uDirty.toFixed(0)}`}
             />
-            <ResultCard 
-              title="LMTD" 
-              value={lmtd.toFixed(2)} 
-              unit="°C" 
-              subtext="Log Mean Temp Diff"
+            <ResultCard
+              title="LMTD"
+              value={lmtdValid ? lmtd.toFixed(2) : '—'}
+              unit="°C"
+              subtext={temperatureCross ? 'Temperature cross' : lmtdValid ? 'Log Mean Temp Diff' : 'Invalid'}
             />
             <ResultCard 
               title="Ft Factor" 
@@ -237,15 +236,25 @@ function HeatTransferContent() {
             </div>
           )}
           
-          {ft === 0 && (
-             <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-200 dark:border-red-800">
-             <h4 className="text-red-800 dark:text-red-200 font-bold flex items-center gap-2">
-               ❌ Invalid Design
-             </h4>
-             <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-               Temperature cross is too severe for this configuration. Design is thermodynamically impossible in a single shell.
-             </p>
-           </div>
+          {(temperatureCross || !lmtdValid) && (
+            <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-200 dark:border-red-800">
+              <h4 className="text-red-800 dark:text-red-200 font-bold flex items-center gap-2">
+                ❌ Invalid design — temperature cross
+              </h4>
+              <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                ΔTl or ΔTr are not positive. LMTD is undefined. This temperature arrangement is impossible in a single shell. Correct inlet/outlet temperatures or use multiple shells in series.
+              </p>
+            </div>
+          )}
+          {lmtdValid && !temperatureCross && ft === 0 && passConfig === '1-2' && (
+            <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-200 dark:border-red-800">
+              <h4 className="text-red-800 dark:text-red-200 font-bold flex items-center gap-2">
+                ❌ Invalid Ft
+              </h4>
+              <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                Ft correction factor is undefined or zero for this 1-2 configuration. Design is not feasible.
+              </p>
+            </div>
           )}
 
           <div className="bg-slate-900 dark:bg-slate-950 text-white p-6 rounded-xl">
