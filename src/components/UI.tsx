@@ -74,6 +74,14 @@ export function ResultCard({ title, value, unit, subtext }: { title: string; val
   );
 }
 
+export function Card({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn("overflow-hidden rounded-lg bg-white dark:bg-slate-800 px-4 py-5 shadow sm:p-6 border border-slate-100 dark:border-slate-700", className)}>
+      {children}
+    </div>
+  );
+}
+
 export function SectionHeader({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">

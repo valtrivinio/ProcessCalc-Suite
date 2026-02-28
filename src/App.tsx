@@ -17,6 +17,7 @@ import Valves from './modules/Valves';
 import ReliefValve from './modules/ReliefValve';
 import Utilities from './modules/Utilities';
 import Settings from './modules/Settings';
+import Validation from './modules/Validation';
 import { SettingsProvider } from './context/SettingsContext';
 
 export default function App() {
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/valves" element={<Valves />} />
             <Route path="/relief-valve" element={<ReliefValve />} />
             <Route path="/utilities" element={<Utilities />} />
+            <Route path="/validation" element={<Validation />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </Layout>

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   Menu, X, Calculator, Droplets, Flame, Cylinder, 
   Activity, Wind, Gauge, ShieldAlert, Beaker, 
-  ArrowRightLeft, Zap, Settings 
+  ArrowRightLeft, Zap, Settings, ShieldCheck
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 
@@ -19,6 +19,7 @@ const navItems = [
   { name: 'Fluid Properties', path: '/fluid-properties', icon: Beaker },
   { name: 'Unit Converter', path: '/converter', icon: ArrowRightLeft },
   { name: 'Utilities', path: '/utilities', icon: Zap },
+  { name: 'Validation', path: '/validation', icon: ShieldCheck },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
