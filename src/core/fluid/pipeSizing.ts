@@ -62,37 +62,3 @@ export function calculatePressureDrop(
   // Darcy-Weisbach: dP = f * (L/D) * (rho * v^2 / 2)
   return f * (L / D) * (rho * v * v / 2); // Pa
 }
-
-/** Sonic velocity for gas: c = sqrt(k * Z * R * T / M), R=8314 J/(kmol·K), M in g/mol */
-export function sonicVelocityGas(k: number, T_K: number, MW: number, Z: number): number {
-  const R = 8314; // J/(kmol·K)
-  return Math.sqrt((k * Z * R * T_K) / MW);
-}
-
-/**
- * Isothermal compressible gas pressure drop (Crane TP-410, ideal gas with Z).
- * P1^2 - P2^2 = (f*L/D) * (W/A)^2 * (R*T/(M*Z))  with W = mass flow kg/s, A m², P Pa, R=8314, M=MW g/mol.
- * Returns dP in Pa (P1 - P2). Choke check: if P2 would be <= P_critical, flow is choked.
- */
-export function calculatePressureDropCompressibleIsothermal(
-  P1_Pa: number,
-  T_K: number,
-  MW: number,
-  Z: number,
-  massFlow_kg_s: number,
-  f: number,
-  L: number,
-  D: number,
-  A_m2: number
-): { dP_Pa: number; P2_Pa: number; isChoked: boolean } {
-  const R = 8314; // J/(kmol·K)
-  const term = (f * L / D) * Math.pow(massFlow_kg_s / A_m2, 2) * (R * T_K / (MW * Z));
-  const P2_sq = P1_Pa * P1_Pa - term;
-  if (P2_sq <= 0) {
-    // Choked: sonic at exit
-    const P_critical = P1_Pa * 0.55; // approx critical pressure ratio ~0.55 for isothermal
-    return { dP_Pa: P1_Pa - P_critical, P2_Pa: P_critical, isChoked: true };
-  }
-  const P2_Pa = Math.sqrt(P2_sq);
-  return { dP_Pa: P1_Pa - P2_Pa, P2_Pa, isChoked: false };
-}

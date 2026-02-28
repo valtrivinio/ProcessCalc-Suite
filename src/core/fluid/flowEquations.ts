@@ -1,7 +1,4 @@
-/**
- * Alternative pipe flow equations (Newton-Raphson Colebrook, Mach from k/P/rho).
- * Not used by the UI; PipeSizing uses src/core/fluid/pipeSizing.ts.
- */
+
 export const GRAVITY = 9.80665; // m/s^2
 export const ATM_PA = 101325; // Pa
 
