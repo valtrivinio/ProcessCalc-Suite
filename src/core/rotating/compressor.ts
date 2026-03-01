@@ -1,29 +1,53 @@
-
 /**
  * Compressor Sizing & Analysis
- * Based on GPSA Engineering Data Book / API 617
+ * Based on GPSA Engineering Data Book / API 617 aware checks
  */
 
 export interface CompressorResult {
-  polytropicHead: number; // kJ/kg
-  dischargeTemp: number; // C
-  gasPower: number; // kW
-  brakePower: number; // kW
-  volumetricFlowInlet: number; // m3/h
+  polytropicHead: number;
+  dischargeTemp: number;
+  gasPower: number;
+  brakePower: number;
+  volumetricFlowInlet: number;
+  Z2: number;
+  stageCount: number;
+  warnings: string[];
+  status: 'VALID' | 'WARNING' | 'INVALID' | 'SAFETY RISK';
 }
 
-/**
- * Calculate Polytropic Head
- * Hp = (Z_avg * R * T1 / (MW * (n-1)/n)) * [ (P2/P1)^((n-1)/n) - 1 ]
- * @param P1 Inlet Pressure (kPa abs)
- * @param P2 Discharge Pressure (kPa abs)
- * @param T1 Inlet Temp (K)
- * @param Z1 Inlet Compressibility
- * @param Z2 Discharge Compressibility (Estimated)
- * @param MW Molecular Weight
- * @param k Heat Capacity Ratio (Cp/Cv)
- * @param eta_p Polytropic Efficiency (0-1)
- */
+export interface CompressorOptions {
+  stages?: number;
+  intercoolerOutletK?: number;
+  zEstimator?: (T: number, P: number) => number;
+}
+
+function singleStage(
+  P1: number,
+  P2: number,
+  T1: number,
+  Z1: number,
+  MW: number,
+  k: number,
+  etaP: number,
+  massFlow: number,
+  zEstimator?: (T: number, P: number) => number,
+) {
+  const m = (k - 1) / (k * etaP);
+  const pr = P2 / P1;
+  const T2 = T1 * Math.pow(pr, m);
+  const Z2 = zEstimator ? zEstimator(T2, P2) : Z1;
+  const Zavg = (Z1 + Z2) / 2;
+  const Rgas = 8314 / MW;
+  const HpJ = (Zavg * Rgas * T1 / m) * (Math.pow(pr, m) - 1);
+  const HpKJkg = HpJ / 1000;
+  const massFlowS = massFlow / 3600;
+  const gasPower = (massFlowS * HpKJkg) / etaP;
+  const brakePower = gasPower / 0.97;
+  const volFlow = (massFlow / MW) * 8.314 * T1 * Z1 / P1;
+
+  return { HpKJkg, T2, Z2, gasPower, brakePower, volFlow };
+}
+
 export function calculateCompressor(
   P1: number,
   P2: number,
@@ -32,55 +56,57 @@ export function calculateCompressor(
   MW: number,
   k: number,
   eta_p: number,
-  massFlow: number // kg/h
+  massFlow: number,
+  options: CompressorOptions = {},
 ): CompressorResult {
-  const R_univ = 8.314; // kJ/kmol.K
-  
-  // Polytropic exponent n
-  // (n-1)/n = (k-1)/(k * eta_p)
-  const m = (k - 1) / (k * eta_p);
-  const n = 1 / (1 - m);
+  const stages = Math.max(options.stages ?? 1, 1);
+  const warnings: string[] = [];
+  let totalHead = 0;
+  let totalGasPower = 0;
+  let totalBrake = 0;
 
-  // Discharge Temp T2
-  // T2 = T1 * (P2/P1)^m
-  const pr = P2 / P1;
-  const T2 = T1 * Math.pow(pr, m);
+  const stagePR = Math.pow(P2 / P1, 1 / stages);
+  let stageP1 = P1;
+  let stageT1 = T1;
+  let stageZ1 = Z1;
+  let lastZ2 = Z1;
 
-  // Average Z (Simplified: assume Z2 approx Z1 or linear)
-  // Ideally iterate, but for sizing Z_avg = Z1 is often used or (Z1+Z2)/2
-  // Let's use Z1 for now as Z2 requires EOS at T2,P2
-  const Z_avg = Z1; 
+  for (let i = 0; i < stages; i++) {
+    const stageP2 = stageP1 * stagePR;
+    const s = singleStage(stageP1, stageP2, stageT1, stageZ1, MW, k, eta_p, massFlow, options.zEstimator);
+    totalHead += s.HpKJkg;
+    totalGasPower += s.gasPower;
+    totalBrake += s.brakePower;
+    stageP1 = stageP2;
+    stageT1 = i < stages - 1 ? options.intercoolerOutletK ?? T1 : s.T2;
+    stageZ1 = options.zEstimator ? options.zEstimator(stageT1, stageP1) : stageZ1;
+    lastZ2 = s.Z2;
+  }
 
-  // Polytropic Head (kJ/kg)
-  // Hp = (Z_avg * (8.314/MW) * T1 / m) * (pr^m - 1)
-  // Note: 8.314 is J/mol.K -> 8314 J/kmol.K. 
-  // MW in g/mol = kg/kmol.
-  // So (8314 / MW) gives J/kg.K
-  // Result in J/kg. Divide by 1000 for kJ/kg.
-  
-  const R_gas = 8314 / MW; // J/kg.K
-  const Hp_J = (Z_avg * R_gas * T1 / m) * (Math.pow(pr, m) - 1);
-  const Hp_kJ = Hp_J / 1000;
+  const dischargeTempC = stageT1 - 273.15;
+  if (dischargeTempC > 150) warnings.push('Discharge temperature above 150°C advisory threshold.');
+  let status: CompressorResult['status'] = 'VALID';
+  if (dischargeTempC > 150) status = 'WARNING';
+  if (dischargeTempC > 200) {
+    warnings.push('Discharge temperature above 200°C hard limit.');
+    status = 'SAFETY RISK';
+  }
 
-  // Gas Power (kW)
-  // P = (MassFlow_kg_s * Hp_kJ) / eta_p
-  const massFlow_s = massFlow / 3600;
-  const gasPower = (massFlow_s * Hp_kJ) / eta_p;
+  const headPerStage = totalHead / stages;
+  if (headPerStage < 20 || headPerStage > 250) warnings.push('Polytropic head per stage outside common centrifugal envelope (~20-250 kJ/kg).');
+  warnings.push('Surge margin is advisory only; verify against OEM map (recommended >10%).');
 
-  // Brake Power (add mechanical losses ~3%)
-  const brakePower = gasPower / 0.97;
-
-  // Inlet Volumetric Flow (m3/h)
-  // PV = nRT -> V = nRT/P = (m/MW)RT/P
-  // V (m3) = (mass_kg * 1000 / MW) * 8.314 * T1 / (P1_kPa)
-  // Flow m3/h
-  const volFlow = (massFlow / MW) * 8.314 * T1 / P1; // (kg/h / (kg/kmol)) * kJ/kmol.K * K / kPa = kmol/h * ...
+  const volFlow = (massFlow / MW) * 8.314 * T1 * Z1 / P1;
 
   return {
-    polytropicHead: Hp_kJ,
-    dischargeTemp: T2 - 273.15, // C
-    gasPower,
-    brakePower,
-    volumetricFlowInlet: volFlow
+    polytropicHead: totalHead,
+    dischargeTemp: dischargeTempC,
+    gasPower: totalGasPower,
+    brakePower: totalBrake,
+    volumetricFlowInlet: volFlow,
+    Z2: lastZ2,
+    stageCount: stages,
+    warnings,
+    status,
   };
 }

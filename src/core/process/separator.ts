@@ -1,122 +1,136 @@
-
 /**
  * Separator Sizing (API 12J / GPSA)
  */
 
 export interface SeparatorResult {
-  diameter: number; // m
-  height: number; // m
-  vGas: number; // m/s (Terminal Velocity)
-  vGasMax: number; // m/s (Allowable)
-  liquidVolume: number; // m3
-  slendernessRatio: number; // H/D
+  diameter: number;
+  height: number;
+  vGas: number;
+  vGasMax: number;
+  liquidVolume: number;
+  slendernessRatio: number;
+  orientation: 'vertical' | 'horizontal';
+  inletMomentum: number;
+  carryoverRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+  warnings: string[];
 }
 
-/**
- * Calculate K-Value for Gas-Liquid Separation (GPSA)
- * K = sqrt( (rhoL - rhoG) / rhoG ) * V
- * Actually V = K * sqrt(...)
- * K typically 0.03 - 0.1 m/s (0.1 - 0.35 ft/s) depending on mist eliminator
- */
-export function calculateKValue(pressureBar: number, hasMistEliminator: boolean = true): number {
-  // GPSA Fig 7-9 approximation
-  // K varies with pressure.
-  // 0-100 psig: K ~ 0.35 ft/s (0.107 m/s)
-  // Higher pressure, K decreases.
-  
-  // Simplified correlation for K (m/s) with Mist Eliminator:
-  // K = 0.107 * (1 - 0.003 * P_bar) roughly, but let's use standard values.
-  
-  let K_mps = 0.107; // Standard for low pressure with mesh pad
-  
-  if (pressureBar > 10) K_mps = 0.09;
-  if (pressureBar > 30) K_mps = 0.08;
-  if (pressureBar > 60) K_mps = 0.07;
-  if (pressureBar > 100) K_mps = 0.06;
-
-  if (!hasMistEliminator) K_mps *= 0.5; // Without demister, V must be lower
-
-  return K_mps;
+export interface SeparatorInput {
+  qGas: number;
+  qLiquid: number;
+  rhoGas: number;
+  rhoLiquid: number;
+  retentionTime: number;
+  pressureBar: number;
+  orientation?: 'vertical' | 'horizontal';
+  hasMistEliminator?: boolean;
+  inletNozzleDiameterM?: number;
 }
 
-/**
- * Vertical Separator Sizing
- * @param qGas m3/h (Actual)
- * @param qLiquid m3/h (Actual)
- * @param rhoGas kg/m3
- * @param rhoLiquid kg/m3
- * @param retentionTime min (Liquid retention)
- */
+export function calculateKValue(pressureBar: number, hasMistEliminator = true): number {
+  // GPSA style smooth pressure dependence (m/s), anchored to 0.35 ft/s at low pressure.
+  const pPsia = pressureBar * 14.5038;
+  const baseFtS = 0.35 / Math.pow(1 + pPsia / 1500, 0.2);
+  let kMps = baseFtS * 0.3048;
+  if (!hasMistEliminator) kMps *= 0.5;
+  return Math.max(kMps, 0.02);
+}
+
+export function calculateGasDensityFromZ(Pbar: number, TK: number, MW: number, Z: number): number {
+  const PPa = Pbar * 1e5;
+  const MkgMol = MW / 1000;
+  return (PPa * MkgMol) / (Math.max(Z, 0.2) * 8.314462618 * TK);
+}
+
+function horizontalLiquidAreaFraction(fillFraction: number): number {
+  // Circle segment area fraction for horizontal separator liquid section.
+  const h = Math.min(Math.max(fillFraction, 1e-3), 0.999);
+  const theta = 2 * Math.acos(1 - 2 * h);
+  return (theta - Math.sin(theta)) / (2 * Math.PI);
+}
+
+export function sizeSeparator(input: SeparatorInput): SeparatorResult {
+  const {
+    qGas,
+    qLiquid,
+    rhoGas,
+    rhoLiquid,
+    retentionTime,
+    pressureBar,
+    orientation = 'vertical',
+    hasMistEliminator = true,
+    inletNozzleDiameterM = 0.1,
+  } = input;
+
+  const warnings: string[] = [];
+  if (rhoLiquid <= rhoGas) {
+    throw new Error('Separator invalid: liquid density must exceed gas density (ρL > ρG).');
+  }
+
+  const K = calculateKValue(pressureBar, hasMistEliminator);
+  const vTerminal = K * Math.sqrt((rhoLiquid - rhoGas) / rhoGas);
+  const vDesign = 0.75 * vTerminal;
+
+  const qGasS = qGas / 3600;
+  const qLiqM3 = (qLiquid / 60) * retentionTime;
+
+  let D = Math.max(Math.ceil(Math.sqrt((4 * qGasS) / (Math.PI * Math.max(vDesign, 1e-6))) * 10) / 10, 0.4);
+  let H = 0;
+
+  if (orientation === 'vertical') {
+    const A = Math.PI * (D / 2) ** 2;
+    const Hliq = qLiqM3 / A;
+    H = Hliq + Math.max(D, 1.0) + 0.3;
+  } else {
+    // Horizontal sizing: gas cross-sectional area at 50% fill + retention via cylindrical volume.
+    const fill = 0.5;
+    const liqAreaFrac = horizontalLiquidAreaFraction(fill);
+    const gasArea = (1 - liqAreaFrac) * Math.PI * (D / 2) ** 2;
+    if (qGasS / gasArea > vDesign) {
+      D *= Math.sqrt((qGasS / gasArea) / vDesign);
+    }
+    const A = liqAreaFrac * Math.PI * (D / 2) ** 2;
+    const L = Math.max(qLiqM3 / Math.max(A, 1e-6), 1.5 * D);
+    H = L;
+  }
+
+  const areaFlow = Math.PI * (D / 2) ** 2;
+  const vGas = qGasS / areaFlow;
+  const slenderness = H / D;
+
+  const inletArea = Math.PI * (inletNozzleDiameterM / 2) ** 2;
+  const vinlet = qGasS / Math.max(inletArea, 1e-6);
+  const inletMomentum = rhoGas * vinlet * vinlet;
+  const apiMomentumLimit = 7000; // Pa-equivalent criterion used in API12J practices.
+  if (inletMomentum > apiMomentumLimit) warnings.push('Inlet momentum exceeds API guideline; inlet diverter upgrade required.');
+
+  let carryoverRisk: SeparatorResult['carryoverRisk'] = 'LOW';
+  if (vGas > 0.9 * vTerminal) carryoverRisk = 'HIGH';
+  else if (vGas > 0.75 * vTerminal) carryoverRisk = 'MEDIUM';
+
+  if (carryoverRisk !== 'LOW') warnings.push(`Carryover risk ${carryoverRisk} based on gas velocity margin.`);
+
+  return {
+    diameter: D,
+    height: H,
+    vGas,
+    vGasMax: vTerminal,
+    liquidVolume: qLiqM3,
+    slendernessRatio: slenderness,
+    orientation,
+    inletMomentum,
+    carryoverRisk,
+    warnings,
+  };
+}
+
 export function sizeVerticalSeparator(
   qGas: number,
   qLiquid: number,
   rhoGas: number,
   rhoLiquid: number,
   retentionTime: number,
-  pressureBar: number
+  pressureBar: number,
 ): SeparatorResult {
-  
-  // 1. Gas Capacity (Terminal Velocity)
-  // V_t = K * sqrt((rhoL - rhoG) / rhoG)
-  const K = calculateKValue(pressureBar, true);
-  const v_t = K * Math.sqrt((rhoLiquid - rhoGas) / rhoGas);
-  
-  // Design Velocity (usually 75% of terminal)
-  const v_design = 0.75 * v_t;
-  
-  // Min Diameter for Gas Separation
-  // A_gas = Q_gas / v_design
-  const qGas_s = qGas / 3600;
-  const A_gas = qGas_s / v_design;
-  const D_gas = Math.sqrt(4 * A_gas / Math.PI);
-
-  // 2. Liquid Capacity (Retention Time)
-  // Vol_liq = Q_liq * t_retention
-  const qLiq_m3min = qLiquid / 60;
-  const Vol_liq = qLiq_m3min * retentionTime;
-  
-  // Assume Liquid Height. For vertical, usually H_liq ~ 0.5D to 1D + surge.
-  // Let's iterate or set standard geometry.
-  // Standard: H_total / D ratio = 2.5 to 4.
-  
-  // Let's pick a Diameter that satisfies Gas, then check Height.
-  // Round D up to nearest standard size (e.g. 0.1m increments)
-  let D = Math.ceil(D_gas * 10) / 10;
-  if (D < 0.3) D = 0.3; // Min 12"
-
-  // Calculate Liquid Height required
-  const A_cross = Math.PI * Math.pow(D / 2, 2);
-  const H_liq = Vol_liq / A_cross;
-  
-  // Total Height
-  // H_total = H_liq + H_disengagement + H_mist_eliminator
-  // H_disengagement usually D or min 1m.
-  const H_disengage = Math.max(D, 1.0);
-  const H_mist = 0.3; // Space for demister
-  const H_total = H_liq + H_disengage + H_mist;
-
-  // Check Slenderness
-  let ratio = H_total / D;
-  
-  // Optimization loop (simple)
-  // If ratio < 2.5, increase H (and thus D stays same, but maybe we force D smaller? No, D is set by gas)
-  // If ratio > 6, increase D to reduce H.
-  
-  if (ratio > 6) {
-    D = D * 1.2; // Increase D
-    // Recalc H
-    const A_new = Math.PI * Math.pow(D / 2, 2);
-    const H_liq_new = Vol_liq / A_new;
-    const H_total_new = H_liq_new + Math.max(D, 1.0) + 0.3;
-    ratio = H_total_new / D;
-  }
-
-  return {
-    diameter: D,
-    height: H_total,
-    vGas: qGas_s / (Math.PI * Math.pow(D/2, 2)),
-    vGasMax: v_t,
-    liquidVolume: Vol_liq,
-    slendernessRatio: ratio
-  };
+  return sizeSeparator({ qGas, qLiquid, rhoGas, rhoLiquid, retentionTime, pressureBar, orientation: 'vertical' });
 }
