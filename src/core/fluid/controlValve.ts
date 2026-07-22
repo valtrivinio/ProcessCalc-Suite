@@ -1,4 +1,6 @@
 // src/core/fluid/controlValve.ts
+
+// --- Liquid valve sizing (original) ---
 export function sizeControlValveLiquid(
   Q: number, P1: number, P2: number,
   fluid: { SG: number; Pv: number; Pc: number }
@@ -11,6 +13,7 @@ export function sizeControlValveLiquid(
   return { Kv, Cv: Kv * 1.156, choked: dP > dPchoked, dPchoked };
 }
 
+// --- Gas valve sizing (original) ---
 export function sizeControlValveGas(
   W: number, P1: number, P2: number,
   fluid: { MW: number; T: number; Z: number; k: number }
@@ -23,3 +26,7 @@ export function sizeControlValveGas(
   const Kv = W / (N8 * P1 * Y * Math.sqrt(Math.min(x, Fk*xT) * fluid.MW / (fluid.T * fluid.Z)));
   return { Kv, Cv: Kv * 1.156, Y };
 }
+
+// --- Aliases for UI compatibility ---
+export const sizeLiquidValve = sizeControlValveLiquid;
+export const sizeGasValve = sizeControlValveGas;
