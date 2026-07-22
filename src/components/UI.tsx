@@ -1,57 +1,39 @@
-import React, { InputHTMLAttributes, SelectHTMLAttributes } from 'react';
-import { cn } from '../utils/cn';
+import React from 'react';
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label: string;
+interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  label?: string;
   unit?: string;
-  error?: string;
 }
 
-export function Input({ label, unit, error, className, ...props }: InputProps) {
+export function Input({ label, unit, ...props }: InputProps) {
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-        {label}
-      </label>
-      <div className="relative rounded-md shadow-sm">
-        <input
-          className={cn(
-            "block w-full rounded-md border-0 py-2 pl-3 pr-10 text-slate-900 dark:text-white ring-1 ring-inset ring-slate-300 dark:ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6 font-mono bg-white dark:bg-slate-800",
-            error && "ring-red-300 focus:ring-red-500 dark:ring-red-900",
-            unit && "pr-12"
-          )}
-          {...props}
-        />
-        {unit && (
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-            <span className="text-slate-500 dark:text-slate-400 sm:text-sm">{unit}</span>
-          </div>
-        )}
-      </div>
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+    <div className="input-group">
+      {label && (
+        <label>
+          {label} {unit && <span className="unit">[{unit}]</span>}
+        </label>
+      )}
+      <input {...props} />
     </div>
   );
 }
 
-interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
-  label: string;
-  options: { value: string; label: string }[];
+interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+  options: any; // can be array or object
+  label?: string;
 }
 
-export function Select({ label, options, className, ...props }: SelectProps) {
+export function Select({ options, label, ...props }: SelectProps) {
+  // Convert options to array if needed
+  const optionsArray = Array.isArray(options) 
+    ? options 
+    : Object.entries(options).map(([key, val]) => ({ label: key, value: val }));
+
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-        {label}
-      </label>
-      <select
-        className={cn(
-          "block w-full rounded-md border-0 py-2 pl-3 pr-10 text-slate-900 dark:text-white ring-1 ring-inset ring-slate-300 dark:ring-slate-600 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6 bg-white dark:bg-slate-800",
-          className
-        )}
-        {...props}
-      >
-        {options.map((opt) => (
+    <div className="select-group">
+      {label && <label>{label}</label>}
+      <select {...props}>
+        {optionsArray.map((opt: any) => (
           <option key={opt.label + opt.value} value={opt.value}>
             {opt.label}
           </option>
@@ -61,32 +43,25 @@ export function Select({ label, options, className, ...props }: SelectProps) {
   );
 }
 
-export function ResultCard({ title, value, unit, subtext }: { title: string; value: string | number; unit?: string; subtext?: string }) {
+interface ResultCardProps {
+  title?: string;
+  children: React.ReactNode;
+}
+
+export function ResultCard({ title, children }: ResultCardProps) {
   return (
-    <div className="overflow-hidden rounded-lg bg-white dark:bg-slate-800 px-4 py-5 shadow sm:p-6 border border-slate-100 dark:border-slate-700">
-      <dt className="truncate text-sm font-medium text-slate-500 dark:text-slate-400">{title}</dt>
-      <dd className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-white font-mono break-all">
-        {value}
-        {unit && <span className="ml-2 text-lg text-slate-400 dark:text-slate-500 font-sans">{unit}</span>}
-      </dd>
-      {subtext && <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">{subtext}</p>}
+    <div className="result-card">
+      {title && <h3>{title}</h3>}
+      <div>{children}</div>
     </div>
   );
 }
 
-export function Card({ children, className }: { children: React.ReactNode; className?: string }) {
+export function SectionHeader({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
-    <div className={cn("overflow-hidden rounded-lg bg-white dark:bg-slate-800 px-4 py-5 shadow sm:p-6 border border-slate-100 dark:border-slate-700", className)}>
+    <div className="section-header">
+      <h2>{title}</h2>
       {children}
-    </div>
-  );
-}
-
-export function SectionHeader({ title, description }: { title: string; description?: string }) {
-  return (
-    <div className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">
-      <h2 className="text-lg font-semibold leading-6 text-slate-900 dark:text-white">{title}</h2>
-      {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
     </div>
   );
 }
