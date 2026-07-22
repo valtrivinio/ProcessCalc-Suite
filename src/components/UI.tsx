@@ -51,8 +51,8 @@ export function Select({ label, options, className, ...props }: SelectProps) {
         )}
         {...props}
       >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
+        {options.map((opt, i) => (
+          <option key={`${opt.value}-${i}`} value={opt.value}>
             {opt.label}
           </option>
         ))}

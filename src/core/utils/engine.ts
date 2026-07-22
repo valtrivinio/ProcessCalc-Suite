@@ -68,3 +68,56 @@ export interface BenchmarkCase {
   tolerance: number; // %
   source: string; // e.g., "GPSA Fig 17-2"
 }
+
+/**
+ * Numerical Solvers
+ */
+
+export function solveNewtonRaphson(
+  f: (x: number) => number,
+  df: (x: number) => number,
+  initialGuess: number,
+  config: ConvergenceConfig
+): number {
+  let x = initialGuess;
+  for (let i = 0; i < config.maxIterations; i++) {
+    const fx = f(x);
+    if (Math.abs(fx) < config.tolerance) return x;
+    
+    const dfx = df(x);
+    if (Math.abs(dfx) < 1e-12) throw new Error(`[NUMERICAL ERROR] Derivative near zero in ${config.name} at x=${x}`);
+    
+    const x_new = x - fx / dfx;
+    if (isNaN(x_new)) throw new Error(`[NUMERICAL ERROR] NaN detected in ${config.name}`);
+    
+    if (Math.abs(x_new - x) < config.tolerance) return x_new;
+    x = x_new;
+  }
+  throw new ConvergenceError(config.name, config.maxIterations);
+}
+
+export function solveSecant(
+  f: (x: number) => number,
+  x0: number,
+  x1: number,
+  config: ConvergenceConfig
+): number {
+  let a = x0;
+  let b = x1;
+  
+  for (let i = 0; i < config.maxIterations; i++) {
+    const fa = f(a);
+    const fb = f(b);
+    
+    if (Math.abs(fb) < config.tolerance) return b;
+    if (Math.abs(fa - fb) < 1e-12) throw new Error(`[NUMERICAL ERROR] Flat slope in ${config.name}`);
+    
+    const x_new = b - fb * (b - a) / (fb - fa);
+    if (isNaN(x_new)) throw new Error(`[NUMERICAL ERROR] NaN detected in ${config.name}`);
+    
+    if (Math.abs(x_new - b) < config.tolerance) return x_new;
+    a = b;
+    b = x_new;
+  }
+  throw new ConvergenceError(config.name, config.maxIterations);
+}

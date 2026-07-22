@@ -32,6 +32,24 @@ const BENCHMARK_CASES: BenchmarkCase[] = [
     expectedResults: { LMTD: 34.76, area: 24.1 },
     tolerance: 1,
     source: 'GPSA Section 11'
+  },
+  {
+    id: 'EOS-01',
+    module: 'Thermodynamics',
+    description: 'Methane/Ethane VLE Flash (50/50 mol%)',
+    inputs: { T: -50, P: 10 },
+    expectedResults: { K_C1: 2.45, K_C2: 0.15 },
+    tolerance: 3,
+    source: 'Phase Equilibria in Chemical Engineering (Walas)'
+  },
+  {
+    id: 'PUMP-02',
+    module: 'Pump Sizing',
+    description: 'Centrifugal Pump NPSHa Calculation',
+    inputs: { P_suction: 1.5, Pv: 0.05, h_friction: 2.3, h_static: 5 },
+    expectedResults: { NPSHa: 12.4 },
+    tolerance: 1,
+    source: 'Hydraulic Institute 9.6.7'
   }
 ];
 
@@ -59,10 +77,16 @@ const Validation: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <SectionHeader 
-        title="Verification & Validation (V&V)" 
-        description="Transparent benchmark library comparing ProcessCalc results against industry standards (API, GPSA, Crane)."
-      />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <SectionHeader 
+          title="Verification & Validation (V&V)" 
+          description="Transparent benchmark library comparing ProcessCalc results against industry standards (API, GPSA, Crane)."
+        />
+        <button className="px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg text-sm font-semibold shadow-lg hover:opacity-90 transition-opacity flex items-center gap-2">
+          <CheckCircle className="w-4 h-4" />
+          Download Full V&V Report (PDF)
+        </button>
+      </div>
 
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-xl flex items-start gap-3">
         <Info className="w-5 h-5 text-blue-600 mt-0.5" />

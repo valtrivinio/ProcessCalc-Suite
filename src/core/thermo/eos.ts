@@ -127,12 +127,98 @@ export class PengRobinsonPackage implements PropertyPackage {
   }
 }
 
-export function calculateEOS(componentName: string, T_C: number, P_bar: number): FluidState {
+
+/**
+ * SRK Implementation
+ */
+export class SRKPackage implements PropertyPackage {
+  name: PropertyModel = 'SRK';
+
+  calculate(mixture: MixtureComponent[], T_C: number, P_bar: number): FluidState {
+    const T = T_C + 273.15; // K
+    const P = P_bar; // bar
+    const R = 0.08314; // bar.L/(mol.K)
+
+    // 1. Calculate individual component parameters
+    const comps = mixture.map(m => {
+      const Tr = T / m.component.Tc;
+      const m_srk = 0.480 + 1.574 * m.component.omega - 0.176 * m.component.omega ** 2;
+      const alpha = (1 + m_srk * (1 - Math.sqrt(Tr))) ** 2;
+      const ai = 0.42748 * (R * m.component.Tc) ** 2 * alpha / m.component.Pc;
+      const bi = 0.08664 * R * m.component.Tc / m.component.Pc;
+      return { ai, bi, xi: m.moleFraction, MW: m.component.MW };
+    });
+
+    // 2. Mixing Rules (Van der Waals)
+    let a_mix = 0;
+    let b_mix = 0;
+    let mw_mix = 0;
+
+    for (let i = 0; i < comps.length; i++) {
+      b_mix += comps[i].xi * comps[i].bi;
+      mw_mix += comps[i].xi * comps[i].MW;
+      for (let j = 0; j < comps.length; j++) {
+        const aij = Math.sqrt(comps[i].ai * comps[j].ai); // kij = 0
+        a_mix += comps[i].xi * comps[j].xi * aij;
+      }
+    }
+
+    const A = a_mix * P / (R * T) ** 2;
+    const B = b_mix * P / (R * T);
+
+    // 3. Solve Cubic for SRK: Z^3 - Z^2 + (A - B - B^2)Z - AB = 0
+    const c2 = -1;
+    const c1 = A - B - B ** 2;
+    const c0 = -A * B;
+
+    const roots = solveCubic(1, c2, c1, c0);
+    const realRoots = roots.filter(r => r > 0);
+
+    let Z = 0;
+    let phase: FluidState['phase'] = 'Vapor';
+
+    if (realRoots.length === 1) {
+      Z = realRoots[0];
+      phase = T > 400 ? 'Supercritical' : (P > 50 ? 'Liquid' : 'Vapor');
+    } else {
+      const Z_vap = Math.max(...realRoots);
+      const Z_liq = Math.min(...realRoots);
+      Z = P > 20 ? Z_liq : Z_vap;
+      phase = P > 20 ? 'Liquid' : 'Vapor';
+    }
+
+    const density = (P * mw_mix) / (Z * R * T);
+
+    return {
+      temperature: T_C,
+      pressure: P_bar,
+      phase,
+      compressibility: Z,
+      density,
+      enthalpy: 0,
+      entropy: 0,
+      viscosity: 0.01,
+      molecularWeight: mw_mix
+    };
+  }
+}
+
+export function calculateEOS(componentName: string, T_C: number, P_bar: number, model: PropertyModel = 'Peng-Robinson'): FluidState {
   const comp = COMPONENTS[componentName];
   if (!comp) throw new Error(`Component ${componentName} not found`);
   
-  const pr = new PengRobinsonPackage();
-  return pr.calculate([{ component: comp, moleFraction: 1.0 }], T_C, P_bar);
+  let pkg: PropertyPackage;
+  switch (model) {
+    case 'SRK':
+      pkg = new SRKPackage();
+      break;
+    case 'Peng-Robinson':
+    default:
+      pkg = new PengRobinsonPackage();
+      break;
+  }
+
+  return pkg.calculate([{ component: comp, moleFraction: 1.0 }], T_C, P_bar);
 }
 
 function solveCubic(a: number, b: number, c: number, d: number): number[] {
