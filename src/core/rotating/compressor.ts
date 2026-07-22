@@ -1,7 +1,5 @@
-// src/core/rotating/compressor.ts
 import { R_UNIVERSAL } from '../constants';
-
-function calculateZ_RK(T: number, P: number, Tc: number, Pc: number): number {
+function calculateZ_RK(T, P, Tc, Pc) {
   const Tr = T / Tc, Pr = P / Pc;
   const a = 0.42748 * (R_UNIVERSAL ** 2 * Tc ** 2.5) / Pc;
   const b = 0.08664 * (R_UNIVERSAL * Tc) / Pc;
@@ -17,9 +15,7 @@ function calculateZ_RK(T: number, P: number, Tc: number, Pc: number): number {
   }
   return Z;
 }
-
-// Main sizing function
-export function sizeCompressor(P1: number, P2: number, T1: number, MW: number, massFlow: number, eta_p: number, k: number, Tc: number, Pc: number) {
+export function sizeCompressor(P1, P2, T1, MW, massFlow, eta_p, k, Tc, Pc) {
   const R = R_UNIVERSAL / (MW / 1000);
   const pr = P2 / P1;
   const Z1 = calculateZ_RK(T1, P1, Tc, Pc);
@@ -32,6 +28,4 @@ export function sizeCompressor(P1: number, P2: number, T1: number, MW: number, m
   const brakePower = gasPower / 0.97;
   return { Hp, T2: T2_ideal, Z_avg, gasPower, brakePower };
 }
-
-// Alias for UI compatibility
 export const calculateCompressor = sizeCompressor;
