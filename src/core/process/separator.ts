@@ -10,6 +10,7 @@ function getKFactor(pressureBar: number, hasMistEliminator: boolean): number {
   return hasMistEliminator ? K * 1.67 : K * 0.5;
 }
 
+// Main sizing function
 export function sizeSeparator(params: {
   gasFlow: number;
   liquidFlow: number;
@@ -37,3 +38,6 @@ export function sizeSeparator(params: {
   } while ((H/D < 2.5 || H/D > 6) && iterations < 50);
   return { D, H, slenderness: H/D, Vdesign, K };
 }
+
+// Alias for UI compatibility (VesselSizing expects sizeVerticalSeparator)
+export const sizeVerticalSeparator = sizeSeparator;
