@@ -65,3 +65,19 @@ export function SectionHeader({ title, children }: { title: string; children?: R
     </div>
   );
 }
+
+interface CardProps {
+  children: React.ReactNode;
+  className?: string;
+  variant?: 'default' | 'outline' | 'ghost';
+}
+
+export function Card({ children, className = '', variant = 'default' }: CardProps) {
+  const base = 'rounded-lg border p-4 shadow-sm';
+  const variants = {
+    default: 'bg-white border-gray-200',
+    outline: 'bg-transparent border-gray-300',
+    ghost: 'bg-transparent border-transparent shadow-none',
+  };
+  return <div className={`${base} ${variants[variant]} ${className}`}>{children}</div>;
+}
