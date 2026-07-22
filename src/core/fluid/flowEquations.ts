@@ -1,69 +1,32 @@
+// src/core/fluid/flowEquations.ts
+import { R_UNIVERSAL } from '../constants';
 
-export const GRAVITY = 9.80665; // m/s^2
-export const ATM_PA = 101325; // Pa
-
-/**
- * Calculate Reynolds Number
- * @param rho Density (kg/m3)
- * @param v Velocity (m/s)
- * @param D Diameter (m)
- * @param mu Viscosity (cP)
- */
-export function calculateReynolds(rho: number, v: number, D: number, mu: number): number {
-  const mu_Pas = mu * 0.001;
-  if (mu_Pas <= 0) return 0;
-  return (rho * v * D) / mu_Pas;
+export function reynolds(rho: number, v: number, D: number, mu_cP: number) {
+  const mu = mu_cP * 0.001;
+  if (mu <= 0) return Infinity;
+  return (rho * v * D) / mu;
 }
 
-/**
- * Solve Colebrook-White Equation for Friction Factor (f)
- * 1/sqrt(f) = -2 * log10( (eps/3.7D) + (2.51 / (Re * sqrt(f))) )
- * Uses Newton-Raphson iteration
- */
-export function solveColebrook(Re: number, eps: number, D: number): number {
-  if (Re < 2300) {
-    return 64 / Re; // Laminar
-  }
-
-  // Initial guess: Swamee-Jain
-  const term1 = eps / (3.7 * D);
-  const term2 = 5.74 / Math.pow(Re, 0.9);
-  let f = 0.25 / Math.pow(Math.log10(term1 + term2), 2);
-
-  // Newton-Raphson
-  for (let i = 0; i < 10; i++) {
+export function colebrookFriction(eps: number, D: number, Re: number): number {
+  if (Re <= 0) return 0.064;
+  if (Re < 2300) return 64 / Re;
+  const relRough = eps / D;
+  let f = 0.02;
+  for (let i = 0; i < 100; i++) {
     const sqrtF = Math.sqrt(f);
-    const term = (eps / (3.7 * D)) + (2.51 / (Re * sqrtF));
-    const g = (1 / sqrtF) + 2 * Math.log10(term);
-    const dg = -0.5 * Math.pow(f, -1.5) + (2 / (Math.LN10 * term)) * (-1.255 / (Re * f * sqrtF));
-    
-    const f_new = f - (g / dg);
-    if (Math.abs(f_new - f) < 1e-6) return f_new;
-    f = f_new;
+    const lhs = 1 / sqrtF;
+    const rhs = -2 * Math.log10(relRough / 3.7 + 2.51 / (Re * sqrtF));
+    const diff = lhs - rhs;
+    if (Math.abs(diff) < 1e-8) return f;
+    f = f * (1 - 0.5 * diff / (1 + 2.51/(Re*sqrtF)));
+    if (f < 0.001) f = 0.001;
+    if (f > 0.1) f = 0.1;
   }
   return f;
 }
 
-/**
- * Calculate Darcy-Weisbach Pressure Drop
- * dP = f * (L/D) * (rho * v^2 / 2)
- */
-export function calculateDarcydP(f: number, L: number, D: number, rho: number, v: number): number {
-  return f * (L / D) * (rho * v * v / 2); // Pa
-}
-
-/**
- * Calculate Mach Number
- * @param v Velocity (m/s)
- * @param k Heat Capacity Ratio (Cp/Cv)
- * @param P Pressure (Pa)
- * @param rho Density (kg/m3)
- */
-export function calculateMach(v: number, k: number, P: number, rho: number): number {
-  // Sonic velocity c = sqrt(k * P / rho) for ideal gas? 
-  // Or c = sqrt(k * Z * R * T / M)
-  // Let's use P/rho relationship: c = sqrt(k * P / rho)
-  if (rho <= 0 || P <= 0) return 0;
-  const c = Math.sqrt(k * P / rho);
+export function machNumber(v: number, k: number, P: number, rho: number, MW: number, Z: number, T: number) {
+  const R_specific = R_UNIVERSAL / (MW / 1000);
+  const c = Math.sqrt(k * Z * R_specific * T);
   return v / c;
 }
