@@ -18,6 +18,7 @@ function calculateZ_RK(T: number, P: number, Tc: number, Pc: number): number {
   return Z;
 }
 
+// Main compressor sizing function (original)
 export function sizeCompressor(P1: number, P2: number, T1: number, MW: number, massFlow: number, eta_p: number, k: number, Tc: number, Pc: number) {
   const R = R_UNIVERSAL / (MW / 1000);
   const pr = P2 / P1;
@@ -31,3 +32,6 @@ export function sizeCompressor(P1: number, P2: number, T1: number, MW: number, m
   const brakePower = gasPower / 0.97;
   return { Hp, T2: T2_ideal, Z_avg, gasPower, brakePower };
 }
+
+// Alias for UI compatibility
+export const calculateCompressor = sizeCompressor;
