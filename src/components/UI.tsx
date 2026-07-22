@@ -52,7 +52,7 @@ export function Select({ label, options, className, ...props }: SelectProps) {
         {...props}
       >
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
+          <option key={opt.label + opt.value} value={opt.value}>
             {opt.label}
           </option>
         ))}

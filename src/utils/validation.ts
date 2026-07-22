@@ -18,6 +18,12 @@ export function validateNumber(
   return null;
 }
 
-export function hasErrors(errors: (string | null)[]): boolean {
-  return errors.some(e => e !== null);
+export function hasErrors(errors: any): boolean {
+  if (Array.isArray(errors)) {
+    return errors.some(e => e !== null && e !== undefined && e !== '');
+  }
+  if (errors && typeof errors === 'object') {
+    return Object.values(errors).some(e => e !== null && e !== undefined && e !== '');
+  }
+  return false;
 }
