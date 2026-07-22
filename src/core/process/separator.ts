@@ -1,4 +1,5 @@
-function getKFactor(pressureBar, hasMistEliminator) {
+// src/core/process/separator.ts
+function getKFactor(pressureBar: number, hasMistEliminator: boolean): number {
   let K = 0.107;
   if (pressureBar > 0 && pressureBar <= 10) K = 0.107 - 0.007 * pressureBar;
   else if (pressureBar > 10 && pressureBar <= 20) K = 0.065 - 0.002 * (pressureBar - 10);
@@ -6,12 +7,22 @@ function getKFactor(pressureBar, hasMistEliminator) {
   else K = 0.030;
   return hasMistEliminator ? K * 1.67 : K * 0.5;
 }
-export function sizeSeparator(params) {
+
+export function sizeSeparator(params: {
+  gasFlow: number;
+  liquidFlow: number;
+  rhoL: number;
+  rhoG: number;
+  pressureBar: number;
+  retentionTime: number;
+  hasMistEliminator: boolean;
+}) {
   const K = getKFactor(params.pressureBar, params.hasMistEliminator);
   const Vt = K * Math.sqrt((params.rhoL - params.rhoG) / params.rhoG);
   const Vdesign = 0.75 * Vt;
   let D = Math.sqrt((4 * params.gasFlow) / (Math.PI * Vdesign));
-  let H = 0, iterations = 0;
+  let H = 0;
+  let iterations = 0;
   do {
     const volLiquid = params.liquidFlow * params.retentionTime * 60;
     const area = Math.PI * (D / 2) ** 2;
@@ -21,7 +32,17 @@ export function sizeSeparator(params) {
     else if (slenderness > 6) D *= 1.05;
     iterations++;
     if (iterations > 50) break;
-  } while ((H/D < 2.5 || H/D > 6) && iterations < 50);
-  return { D, H, slenderness: H/D, Vdesign, K };
+  } while ((H / D < 2.5 || H / D > 6) && iterations < 50);
+  // Return properties with names expected by VesselSizing component
+  return {
+    diameter: D,
+    height: H,
+    vGas: Vdesign,
+    vGasMax: Vt,
+    slendernessRatio: H / D,
+    K: K
+  };
 }
+
+// Alias for UI compatibility
 export const sizeVerticalSeparator = sizeSeparator;
