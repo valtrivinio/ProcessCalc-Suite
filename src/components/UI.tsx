@@ -15,9 +15,19 @@ export function Input({ label, unit, ...props }) {
 
 export function Select({ options, label, ...props }) {
   // Convert object to array of {label, value}
-  const optionsArray = Array.isArray(options)
-    ? options
-    : Object.entries(options).map(([key, val]) => ({ label: key, value: val }));
+  let optionsArray = [];
+  if (Array.isArray(options)) {
+    optionsArray = options;
+  } else if (options && typeof options === 'object') {
+    optionsArray = Object.entries(options).map(([key, val]) => ({
+      label: key,
+      value: val,
+    }));
+  }
+  // If still empty, provide a fallback
+  if (optionsArray.length === 0) {
+    optionsArray = [{ label: 'No options', value: '' }];
+  }
 
   return (
     <div className="select-group">
