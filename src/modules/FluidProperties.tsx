@@ -1,157 +1,91 @@
 import React, { useState } from 'react';
-import { SectionHeader, Input, ResultCard } from '../components/UI';
+import { SectionHeader, Input, ResultCard, Select } from '../components/UI';
 import { validateNumber } from '../utils/validation';
-import { FluidSelector } from '../components/FluidSelector';
+import { PengRobinson } from '../core/thermal/eos';
+
+const COMPONENTS = {
+  Methane: { Tc: 190.56, Pc: 45.99, omega: 0.011, MW: 16.04 },
+  Ethane: { Tc: 305.32, Pc: 48.72, omega: 0.099, MW: 30.07 },
+  Propane: { Tc: 369.83, Pc: 42.48, omega: 0.152, MW: 44.1 },
+  Butane: { Tc: 425.12, Pc: 37.96, omega: 0.2, MW: 58.12 },
+  Pentane: { Tc: 469.7, Pc: 33.7, omega: 0.251, MW: 72.15 },
+  Hexane: { Tc: 507.6, Pc: 30.25, omega: 0.301, MW: 86.18 },
+  Nitrogen: { Tc: 126.2, Pc: 33.9, omega: 0.037, MW: 28.01 },
+  CO2: { Tc: 304.1, Pc: 73.8, omega: 0.224, MW: 44.01 },
+  Water: { Tc: 647.1, Pc: 220.6, omega: 0.344, MW: 18.02 },
+};
 
 export default function FluidProperties() {
-  // API <-> SG
-  const [api, setApi] = useState<string>('');
-  const [sg, setSg] = useState<string>('');
-  const [gasSg, setGasSg] = useState<string>('');
-  
-  // Flash Results
-  const [flashResult, setFlashResult] = useState<any>(null);
-  
-  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+  const [component, setComponent] = useState('Methane');
+  const [temperature, setTemperature] = useState('25');
+  const [pressure, setPressure] = useState('1.013');
+  const [result, setResult] = useState<any>(null);
+  const [errors, setErrors] = useState({});
 
-  // Calculations
-  const calculateSG = (apiVal: string) => {
-    if (!apiVal) {
-      setSg('');
-      return;
-    }
-    const val = parseFloat(apiVal);
-    if (isNaN(val)) return;
-    const res = 141.5 / (val + 131.5);
-    setSg(res.toFixed(4));
+  const validate = () => {
+    const errs: any = {};
+    errs.temp = validateNumber(parseFloat(temperature), 'Temperature', { min: -273.15, required: true });
+    errs.pressure = validateNumber(parseFloat(pressure), 'Pressure', { min: 0, required: true });
+    setErrors(errs);
+    return !Object.values(errs).some(e => e !== null);
   };
 
-  const calculateAPI = (sgVal: string) => {
-    if (!sgVal) {
-      setApi('');
-      return;
-    }
-    const val = parseFloat(sgVal);
-    if (isNaN(val) || val <= 0) return;
-    const res = (141.5 / val) - 131.5;
-    setApi(res.toFixed(2));
+  const calculate = () => {
+    if (!validate()) return;
+    const comp = COMPONENTS[component as keyof typeof COMPONENTS];
+    if (!comp) return;
+    const eos = new PengRobinson();
+    const result = eos.calculate(
+      [{ component: comp, moleFraction: 1 }],
+      parseFloat(temperature),
+      parseFloat(pressure)
+    );
+    setResult(result);
   };
-
-  const handleApiChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setApi(val);
-    calculateSG(val);
-  };
-
-  const handleSgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setSg(val);
-    calculateAPI(val);
-  };
-
-  const handleGasSgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setGasSg(e.target.value);
-  };
-
-  // Water density at 60F approx 999 kg/m3
-  const waterDensity = 999.0; 
-  const calculatedDensity = (sg && !isNaN(parseFloat(sg))) ? (parseFloat(sg) * waterDensity).toFixed(1) : '-';
-  
-  // Gas MW
-  const gasMw = (gasSg && !isNaN(parseFloat(gasSg))) ? (parseFloat(gasSg) * 28.96).toFixed(2) : '-';
 
   return (
     <div className="space-y-8">
-      <SectionHeader 
-        title="Fluid Properties & Flash" 
-        description="Calculate thermodynamic properties using EOS and standard correlations." 
-      />
-
-      {/* EOS Flash Section */}
+      <SectionHeader title="Fluid Properties & Flash" />
       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
         <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-white">Component Property Flash (Peng-Robinson)</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div>
-            <FluidSelector 
-              onFluidChange={(props) => setFlashResult(props)}
-              initialTemp="25"
-              initialPressure="1.013"
+          <div className="space-y-4">
+            <Select
+              label="Fluid Component"
+              options={Object.keys(COMPONENTS).map(key => ({ value: key, label: key }))}
+              value={component}
+              onChange={e => setComponent(e.target.value)}
             />
+            <Input
+              label="Temperature"
+              unit="°C"
+              value={temperature}
+              onChange={e => setTemperature(e.target.value)}
+              error={errors.temp}
+            />
+            <Input
+              label="Pressure"
+              unit="bar(a)"
+              value={pressure}
+              onChange={e => setPressure(e.target.value)}
+              error={errors.pressure}
+            />
+            <button
+              onClick={calculate}
+              className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            >
+              Calculate Properties
+            </button>
           </div>
-          
           <div className="space-y-4">
             <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">Calculated Properties</h4>
             <div className="grid grid-cols-2 gap-4">
-              <ResultCard title="Phase" value={flashResult?.phase || '-'} />
-              <ResultCard title="Density" value={flashResult?.density.toFixed(2) || '-'} unit="kg/m³" />
-              <ResultCard title="Viscosity" value={flashResult?.viscosity.toFixed(3) || '-'} unit="cP" />
-              <ResultCard title="Z-Factor" value={flashResult?.compressibility.toFixed(4) || '-'} />
-              <ResultCard title="Mol. Weight" value={flashResult?.molecularWeight.toFixed(2) || '-'} unit="g/mol" />
-              <ResultCard title="Enthalpy" value={flashResult?.enthalpy ? (flashResult.enthalpy/1000).toFixed(2) : '-'} unit="kJ/kg" subtext="Ideal Gas Ref" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* API <-> SG Converter */}
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm">
-          <h3 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">API Gravity ↔ Specific Gravity</h3>
-          <div className="space-y-4">
-            <Input 
-              label="API Gravity" 
-              value={api} 
-              onChange={handleApiChange}
-              type="number"
-              placeholder="e.g. 35"
-            />
-            <div className="flex justify-center text-slate-400 dark:text-slate-500">
-              <span className="text-sm">⇅</span>
-            </div>
-            <Input 
-              label="Specific Gravity (SG) @ 60°F" 
-              value={sg} 
-              onChange={handleSgChange}
-              type="number"
-              step="0.0001"
-              placeholder="e.g. 0.85"
-            />
-          </div>
-          
-          <div className="mt-6 rounded-lg bg-slate-50 dark:bg-slate-900 p-4">
-            <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Derived Properties</h4>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <span className="text-xs text-slate-500 dark:text-slate-400 block">Density (Water=1)</span>
-                <span className="font-mono text-lg font-semibold text-slate-900 dark:text-white">{sg || '-'}</span>
-              </div>
-              <div>
-                <span className="text-xs text-slate-500 dark:text-slate-400 block">Density @ 60°F</span>
-                <span className="font-mono text-lg font-semibold text-slate-900 dark:text-white">{calculatedDensity} <span className="text-sm font-sans text-slate-400 dark:text-slate-500">kg/m³</span></span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Gas MW Estimation */}
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm">
-          <h3 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">Gas Properties</h3>
-          <div className="space-y-4">
-            <Input 
-              label="Gas Specific Gravity (Air=1)" 
-              type="number"
-              placeholder="e.g. 0.65"
-              value={gasSg}
-              onChange={handleGasSgChange}
-            />
-            
-            <div className="mt-6 rounded-lg bg-slate-50 dark:bg-slate-900 p-4">
-              <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Estimated Molecular Weight</h4>
-              <div>
-                <span className="font-mono text-2xl font-semibold text-slate-900 dark:text-white">{gasMw}</span>
-                <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">g/mol</span>
-              </div>
-              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">Assumes Air MW = 28.96 g/mol</p>
+              <ResultCard title="Phase" value={result?.phase || '-'} />
+              <ResultCard title="Density" value={result?.density ? result.density.toFixed(2) : '-'} unit="kg/m³" />
+              <ResultCard title="Viscosity" value={result?.viscosity ? result.viscosity.toFixed(3) : '-'} unit="cP" />
+              <ResultCard title="Z-Factor" value={result?.compressibility ? result.compressibility.toFixed(4) : '-'} />
+              <ResultCard title="Mol. Weight" value={result?.molecularWeight ? result.molecularWeight.toFixed(2) : '-'} unit="g/mol" />
+              <ResultCard title="Enthalpy" value={result?.enthalpy ? (result.enthalpy / 1e3).toFixed(2) : '-'} unit="kJ/kg" subtext="Ideal Gas Ref" />
             </div>
           </div>
         </div>
